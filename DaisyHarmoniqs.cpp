@@ -7,11 +7,14 @@ using namespace daisy;
 
 #define POLYPHONY 6
 #define AVERAGE_WINDOW_LENGTH 1024
+#define WAVETABLE_LENGTH 1024
+#define WAVETABLE_LENGTH_HALF 512
+#define WAVETABLE_LENGTH_HALF_MINUS_1 511
 
-static DaisyPod   pod;
-static Oscillator lfo;
-static MoogLadder flt;
-static Decimator decim;
+DaisyPod   pod;
+Oscillator lfo;
+MoogLadder flt;
+Decimator decim;
 
 float oldk1, oldk2, k1, k2;
 
@@ -25,17 +28,20 @@ int avrg_cursor = 0;
 
 float maximumOutputValue = 0.0f;
 
-bool envToVol;
-bool envToOddEven;
-bool envToLowHigh;
-bool envToHarmLevel;
-bool envToBitcrush;
+int noteOnAmount = 0;
+int noteOffAmount = 0;
 
-float pitchCV;
-float harmOddEvenCV;
-float harmLevelCV;
-float harmLowHighCV;
-float bitcrushCV;
+bool envToVol = false;
+bool envToOddEven = false;
+bool envToLowHigh = false;
+bool envToHarmLevel = false;
+bool envToBitcrush = false;
+
+float pitchCV = 0.f;
+float harmOddEvenCV = 0.f;
+float harmLevelCV = 0.f;
+float harmLowHighCV = 0.f;
+float bitcrushCV = 0.f;
 
 bool adjustDistortion = false;
 float distortionCV = 0.0f;
@@ -51,19 +57,19 @@ float inharmonism = 0.0f;
 
 bool bitcrusherIsSmooth = true;
 
-float pitchBend;
+float pitchBend = 0.f;
 
-float modwheel;
+float modwheel = 0.f;
 
 int age = 1;
 
-float lfoSpeed = 1.0f;
+float lfoSpeed = 1.f;
 
-float lfoToVol = 0.0f;
-float lfoToHarmLevel = 0.0f;
-float lfoToOddEven = 0.0f;
-float lfoToHarmLowHigh = 0.0f;
-float lfoToBitcrush = 0.0f;
+float lfoToVol = 0.f;
+float lfoToHarmLevel = 0.f;
+float lfoToOddEven = 0.f;
+float lfoToHarmLowHigh = 0.f;
+float lfoToBitcrush = 0.f;
 
 int encoderLfoSelection = 0;
 
@@ -118,6 +124,8 @@ omaVoice voices[POLYPHONY];
 
 int harmonicsTestRound = 0;
 
+const float hlhLimits[7] = { 0.00f, 0.05f, 0.20f, 0.35f, 0.50f, 0.75f, 0.90f };
+
 void ConditionalParameter(float  oldVal,
                           float  newVal,
                           float &param,
@@ -127,13 +135,6 @@ void Controls();
 
 void UpdateHarmonicValues()
 {
-    float limit1 = 0.05f;
-    float limit2 = 0.20f;
-    float limit3 = 0.35f;
-    float limit4 = 0.50f;
-    float limit5 = 0.75f;
-    float limit6 = 0.90f;
-
     for (int i = 0; i < POLYPHONY; i++) {
         float harmLowHighCV_env = harmLowHighCV * (envToLowHigh ? voices[i].generalEnvelopeValue : 1.0f);
         harmLowHighCV_env = ((1.0f - lfoToHarmLowHigh) * (harmLowHighCV_env) + lfoToHarmLowHigh * lfoCurrentValue * harmLowHighCV_env);
@@ -141,67 +142,67 @@ void UpdateHarmonicValues()
             harmLowHighCV_env *= modwheel;
         }
         voices[i].harmonics[0] = 1.0f;
-        if (harmLowHighCV_env < limit1) {
-            voices[i].harmonics[1] = harmLowHighCV_env * (2.0f / limit2) + 0.5f;
-            voices[i].harmonics[2] = harmLowHighCV_env * (1.0f / limit2) + 0.25f;
-            voices[i].harmonics[3] = harmLowHighCV_env * (1.50f / limit2);
+        if (harmLowHighCV_env < hlhLimits[1]) {
+            voices[i].harmonics[1] = harmLowHighCV_env * (2.0f / hlhLimits[2]) + 0.5f;
+            voices[i].harmonics[2] = harmLowHighCV_env * (1.0f / hlhLimits[2]) + 0.25f;
+            voices[i].harmonics[3] = harmLowHighCV_env * (1.50f / hlhLimits[2]);
             voices[i].harmonics[4] = 0.0f;
             voices[i].harmonics[5] = 0.0f;
             voices[i].harmonics[6] = 0.0f;
             voices[i].harmonics[7] = 0.0f;
-        } else if (harmLowHighCV_env < limit2) {
-            float multiplier = 1.0f / (limit3 - limit2);
+        } else if (harmLowHighCV_env < hlhLimits[2]) {
+            float multiplier = 1.0f / (hlhLimits[3] - hlhLimits[2]);
             voices[i].harmonics[1] = 1.0f;
             voices[i].harmonics[2] = 0.666f;
             voices[i].harmonics[3] = 0.333f;
             voices[i].harmonics[4] = 0.0f;
-            voices[i].harmonics[5] = 0.333f * (harmLowHighCV_env - limit1) * multiplier;
-            voices[i].harmonics[6] = 0.666f * (harmLowHighCV_env - limit1) * multiplier;
-            voices[i].harmonics[7] = (harmLowHighCV_env - limit1) * multiplier;
-        } else if (harmLowHighCV_env < limit3) {
-            float multiplier = 1.0f / (limit3 - limit2);
+            voices[i].harmonics[5] = 0.333f * (harmLowHighCV_env - hlhLimits[1]) * multiplier;
+            voices[i].harmonics[6] = 0.666f * (harmLowHighCV_env - hlhLimits[1]) * multiplier;
+            voices[i].harmonics[7] = (harmLowHighCV_env - hlhLimits[1]) * multiplier;
+        } else if (harmLowHighCV_env < hlhLimits[3]) {
+            float multiplier = 1.0f / (hlhLimits[3] - hlhLimits[2]);
             voices[i].harmonics[1] = 1.0f;
-            voices[i].harmonics[2] = 0.666f + 0.333f * (harmLowHighCV_env - limit2) * multiplier;
-            voices[i].harmonics[3] = 0.333f + 0.666f * (harmLowHighCV_env - limit2) * multiplier;
-            voices[i].harmonics[4] = (harmLowHighCV_env - limit2) *  (1.0f/(limit3-limit2));
-            voices[i].harmonics[5] = 0.333f + 0.333f * (harmLowHighCV_env - limit2) * multiplier;
-            voices[i].harmonics[6] = 0.666f - 0.333f * (harmLowHighCV_env - limit2) * multiplier;
-            voices[i].harmonics[7] = 1.0f - (harmLowHighCV_env - limit2) * multiplier;
-        } else if (harmLowHighCV_env < limit4) {
-            float multiplier = 1.0f / (limit4 - limit3);
+            voices[i].harmonics[2] = 0.666f + 0.333f * (harmLowHighCV_env - hlhLimits[2]) * multiplier;
+            voices[i].harmonics[3] = 0.333f + 0.666f * (harmLowHighCV_env - hlhLimits[2]) * multiplier;
+            voices[i].harmonics[4] = (harmLowHighCV_env - hlhLimits[2]) *  multiplier;
+            voices[i].harmonics[5] = 0.333f + 0.333f * (harmLowHighCV_env - hlhLimits[2]) * multiplier;
+            voices[i].harmonics[6] = 0.666f - 0.333f * (harmLowHighCV_env - hlhLimits[2]) * multiplier;
+            voices[i].harmonics[7] = 1.0f - (harmLowHighCV_env - hlhLimits[2]) * multiplier;
+        } else if (harmLowHighCV_env < hlhLimits[4]) {
+            float multiplier = 1.0f / (hlhLimits[4] - hlhLimits[3]);
             voices[i].harmonics[1] = 1.0f;
             voices[i].harmonics[2] = 1.0f;
             voices[i].harmonics[3] = 1.0f;
             voices[i].harmonics[4] = 1.0f;
-            voices[i].harmonics[5] = 0.666f + 0.333f * (harmLowHighCV_env - limit3) * multiplier;
-            voices[i].harmonics[6] = 0.333f + 0.666f * (harmLowHighCV_env - limit3) * multiplier;
-            voices[i].harmonics[7] = (harmLowHighCV_env - limit3) * multiplier;
-        } else if (harmLowHighCV_env < limit5) {
-            float multiplier = 1.0f / (limit5 - limit4);
-            voices[i].harmonics[1] = 1 - (harmLowHighCV_env - limit4) * multiplier;
-            voices[i].harmonics[2] = 1 - 0.666f * (harmLowHighCV_env - limit4) * multiplier;
-            voices[i].harmonics[3] = 1 - 0.333f * (harmLowHighCV_env - limit4) * multiplier;
+            voices[i].harmonics[5] = 0.666f + 0.333f * (harmLowHighCV_env - hlhLimits[3]) * multiplier;
+            voices[i].harmonics[6] = 0.333f + 0.666f * (harmLowHighCV_env - hlhLimits[3]) * multiplier;
+            voices[i].harmonics[7] = (harmLowHighCV_env - hlhLimits[3]) * multiplier;
+        } else if (harmLowHighCV_env < hlhLimits[5]) {
+            float multiplier = 1.0f / (hlhLimits[5] - hlhLimits[4]);
+            voices[i].harmonics[1] = 1 - (harmLowHighCV_env - hlhLimits[4]) * multiplier;
+            voices[i].harmonics[2] = 1 - 0.666f * (harmLowHighCV_env - hlhLimits[4]) * multiplier;
+            voices[i].harmonics[3] = 1 - 0.333f * (harmLowHighCV_env - hlhLimits[4]) * multiplier;
             voices[i].harmonics[4] = 1.0f;
-            voices[i].harmonics[5] = 1 - 0.333f * (harmLowHighCV_env - limit4) * multiplier;
-            voices[i].harmonics[6] = 1 - 0.666f * (harmLowHighCV_env - limit4) * multiplier;
-            voices[i].harmonics[7] = 1 - (harmLowHighCV_env - limit4) * multiplier;
-        } else if (harmLowHighCV_env < limit6) {
-            float multiplier = 1.0f / (limit6 - limit5);
+            voices[i].harmonics[5] = 1 - 0.333f * (harmLowHighCV_env - hlhLimits[4]) * multiplier;
+            voices[i].harmonics[6] = 1 - 0.666f * (harmLowHighCV_env - hlhLimits[4]) * multiplier;
+            voices[i].harmonics[7] = 1 - (harmLowHighCV_env - hlhLimits[4]) * multiplier;
+        } else if (harmLowHighCV_env < hlhLimits[6]) {
+            float multiplier = 1.0f / (hlhLimits[6] - hlhLimits[5]);
             voices[i].harmonics[1] = 0.0f;
-            voices[i].harmonics[2] = 0.333f - 0.333f * (harmLowHighCV_env - limit5) * multiplier;
-            voices[i].harmonics[3] = 0.666f - 0.666f * (harmLowHighCV_env - limit5) * multiplier;
-            voices[i].harmonics[4] = 1.0f - (harmLowHighCV_env - limit5) * multiplier;
-            voices[i].harmonics[5] = 0.666f - 0.333f * (harmLowHighCV_env - limit5) * multiplier;
-            voices[i].harmonics[6] = 0.333f + 0.333f * (harmLowHighCV_env - limit5) * multiplier;
-            voices[i].harmonics[7] = (harmLowHighCV_env - limit5) * multiplier;
+            voices[i].harmonics[2] = 0.333f - 0.333f * (harmLowHighCV_env - hlhLimits[5]) * multiplier;
+            voices[i].harmonics[3] = 0.666f - 0.666f * (harmLowHighCV_env - hlhLimits[5]) * multiplier;
+            voices[i].harmonics[4] = 1.0f - (harmLowHighCV_env - hlhLimits[5]) * multiplier;
+            voices[i].harmonics[5] = 0.666f - 0.333f * (harmLowHighCV_env - hlhLimits[5]) * multiplier;
+            voices[i].harmonics[6] = 0.333f + 0.333f * (harmLowHighCV_env - hlhLimits[5]) * multiplier;
+            voices[i].harmonics[7] = (harmLowHighCV_env - hlhLimits[5]) * multiplier;
         } else {
-            float multiplier = 1.0f / (1.0f - limit6);
+            float multiplier = 1.0f / (1.0f - hlhLimits[6]);
             voices[i].harmonics[1] = 0.0f;
             voices[i].harmonics[2] = 0.0f;
             voices[i].harmonics[3] = 0.0f;
             voices[i].harmonics[4] = 0.0f;
-            voices[i].harmonics[5] = 0.333f - 0.333f * (harmLowHighCV_env - limit6) * multiplier;
-            voices[i].harmonics[6] = 0.666f - 0.333f * (harmLowHighCV_env - limit6) * multiplier;
+            voices[i].harmonics[5] = 0.333f - 0.333f * (harmLowHighCV_env - hlhLimits[6]) * multiplier;
+            voices[i].harmonics[6] = 0.666f - 0.333f * (harmLowHighCV_env - hlhLimits[6]) * multiplier;
             voices[i].harmonics[7] = 1.0f;
         }
         
@@ -228,22 +229,22 @@ void UpdateHarmonicValues()
 
 float fastTanh(float in)
 {
-    if (in < -3.0f) {
-        return -1.0f;
-    } else if (in > 3.0f) {
-        return 1.0f;
+    if (in < -3.f) {
+        return -1.f;
+    } else if (in > 3.f) {
+        return 1.f;
     } else {
         float in2 = in*in;
-        return in * (27.0f + in2) / (27.0f + in2 * 9.0f);
+        return in * (27.f + in2) / (27.f + in2 * 9.f);
     }
 }
 
 
 void NextSamples(float &sig)
 {
-    sig = 0;
+    sig = 0.f;
 
-    float 🧙 = 2.0f;
+    float 🧙 = 2.f;
 
     for (int e = 0; e < POLYPHONY; e++) {
         voices[e].generalEnvelopeValue = voices[e].envelope.Process(voices[e].on);
@@ -251,7 +252,7 @@ void NextSamples(float &sig)
 
     float combiEnveValueTemp = combinedEnvelope.Process(combinedEnvelopeOn);
 
-    lfoCurrentValue = (lfo.Process() + 1.0f) * 0.5f;
+    lfoCurrentValue = (lfo.Process() + 1.f) * 0.5f;
     
     UpdateHarmonicValues();
 
@@ -259,9 +260,9 @@ void NextSamples(float &sig)
         float generalEnvelope = voices[v].envelope.Process(voices[v].on);
         voices[v].oscillator.SetFreq(voices[v].oscFreq * pitchBend);
 
-        int osc0 = int(voices[v].oscillator.Process() * 512 + 511);
+        int osc0 = int(voices[v].oscillator.Process() * WAVETABLE_LENGTH_HALF + WAVETABLE_LENGTH_HALF_MINUS_1);
 
-        float gain = 1.0f / (sqrt( 1.0f + 
+        float gain = 1.f / (sqrt( 1.f + 
                 voices[v].harmonics[1] + 
                 voices[v].harmonics[2] + 
                 voices[v].harmonics[3] + 
@@ -276,19 +277,13 @@ void NextSamples(float &sig)
 
             int oscPlusHarm = (int)(osc0 * (i+1));
 
-            int inharmTemp = (int)(inharmonism * 1023.0f * lfoCurrentValue * ((float)i+1.0f) * (2.0f / 3.0f) ) % 1024;
+            int inharmTemp = (int)(inharmonism * WAVETABLE_LENGTH * lfoCurrentValue * ((float)i+1.f) * (2.f / 3.f) ) % WAVETABLE_LENGTH;
 
             if (inharmTemp < 0) {
-                inharmTemp = 1024 - inharmTemp;
+                inharmTemp = WAVETABLE_LENGTH - inharmTemp;
             }
 
-            oscPlusHarm = oscPlusHarm % 1024 + inharmTemp;
-            
-            /*
-            float harmTemp = sineWavetable[oscPlusHarm % 1024] * voices[v].harmonics[i] * harmLevelCV * (envToHarmLevel ? generalEnvelope : 1.0f);
-            */
-
-            float harmTemp = sineWavetable[oscPlusHarm % 1024]; // Base wavetable
+            float harmTemp = sineWavetable[(oscPlusHarm + inharmTemp) % WAVETABLE_LENGTH]; // Base wavetable
             harmTemp *= voices[v].harmonics[i];                 // Harmonic gain
             harmTemp *= harmLevelCV;                            // General harmonic gain CV
 
@@ -312,7 +307,7 @@ void NextSamples(float &sig)
 
         signalTemp *= gain;  // Gain to equalize volume when amount of harmonics change
 
-        float bitcrushTemp = bitcrushCV * (envToBitcrush ? voices[v].generalEnvelopeValue : 1.0f);
+        float bitcrushTemp = bitcrushCV * (envToBitcrush ? voices[v].generalEnvelopeValue : 1.f);
 
         bitcrushTemp = bitcrushCV;   // Set basic amount of bitcrushing
 
@@ -325,8 +320,6 @@ void NextSamples(float &sig)
         if (modwheelToBitcrush) {    // Apply Modwheel to bitcrushing if applicable
             bitcrushTemp *= modwheel;
         }
-
-        //voices[v].decim.SetSmoothCrushing(bitcrusherIsSmooth);  // Unnecessary?
 
         voices[v].decim.SetBitcrushFactor(bitcrushTemp);
 
@@ -356,18 +349,18 @@ void NextSamples(float &sig)
     avrg_sum_pre -= oldest_avrg_sample_pre;
     avrg_sum_pre += abs_pre;
 
-    sig = fastTanh(sig * (1.0f + (distortionCV * 100.f)));
+    sig = fastTanh(sig * (1.f + (distortionCV * 100.f)));
 
 
     float filterFreqCVTemp = filterFreqCV;
 
-    filterFreqCVTemp = (1.0f - envelopeToFilterAmount) * filterFreqCVTemp + (envelopeToFilterAmount * combiEnveValueTemp) * filterFreqCVTemp; 
+    filterFreqCVTemp = (1.f - envelopeToFilterAmount) * filterFreqCVTemp + (envelopeToFilterAmount * combiEnveValueTemp) * filterFreqCVTemp; 
 
 
-    flt.SetFreq((filterFreqCVTemp * filterFreqCVTemp * filterFreqCVTemp * combiEnveValueTemp * 18000.0f) + 200.0f);
+    flt.SetFreq((filterFreqCVTemp * filterFreqCVTemp * filterFreqCVTemp * combiEnveValueTemp * 18000.f) + 200.f);
     flt.SetRes(filterRezCV);
 
-    sig = flt.Process(sig) * (1.0f + filterRezCV);
+    sig = flt.Process(sig) * (1.f + filterRezCV);
 
     float abs_post = abs(sig);
     avrg_samples_post[avrg_cursor] = abs_post;
@@ -382,7 +375,7 @@ void NextSamples(float &sig)
         sig *= distQuieter;
     }
 
-    sig = ((1.0f - lfoToVol) * sig) + (lfoToVol * lfoCurrentValue * sig);    // Apply right amount of LFO to volume
+    sig = ((1.f - lfoToVol) * sig) + (lfoToVol * lfoCurrentValue * sig);    // Apply right amount of LFO to volume
 
     if (modwheelToVol) {
         sig *= modwheel;
@@ -421,7 +414,7 @@ void HandleMidiMessage(MidiEvent m)
         case NoteOn:
         {
             NoteOnEvent noteOn = m.AsNoteOn();
-
+            noteOnAmount++;
             combinedEnvelopeOn = true;
             combinedEnvelope.Retrigger(false);
 
@@ -470,6 +463,7 @@ void HandleMidiMessage(MidiEvent m)
             voices[index].note = noteOn.note;
             voices[index].age = age;
             
+            /*
             char        buff[512];
             sprintf(buff,
                     "Note Received:\t\t%d\t%d\t%d\tNow playing: %d %d %d %d %d %d\r\n",
@@ -483,7 +477,8 @@ void HandleMidiMessage(MidiEvent m)
                     voices[4].on ? voices[4].note : 0,
                     voices[5].on ? voices[5].note : 0);
             
-            //pod.seed.usb_handle.TransmitInternal((uint8_t *)buff, strlen(buff));
+            pod.seed.usb_handle.TransmitInternal((uint8_t *)buff, strlen(buff));
+            */
             
 
         }
@@ -491,16 +486,19 @@ void HandleMidiMessage(MidiEvent m)
         case NoteOff:
         {
             NoteOffEvent noteOff = m.AsNoteOff();
-            
+            noteOffAmount++;
+
+            /*
             char        buff[512];
             sprintf(buff,
                     "Note Off Received:\t%d\t%d\t%d\r\n",
                     m.channel,
                     m.data[0],
                     m.data[1]);
-            //pod.seed.usb_handle.TransmitInternal((uint8_t *)buff, strlen(buff));
+            pod.seed.usb_handle.TransmitInternal((uint8_t *)buff, strlen(buff));
+            */
             
-            bool anyOnTemp = false;
+            int anyOnTemp = 0;
 
             for (int i = 0; i < POLYPHONY; i++) {
 
@@ -508,27 +506,25 @@ void HandleMidiMessage(MidiEvent m)
                     voices[i].on = false;
                 }
 
-                if (voices[i].on) {
-                    anyOnTemp = true;
-                }
+                anyOnTemp += voices[i].on;
             }
 
-            combinedEnvelopeOn = anyOnTemp;
+            combinedEnvelopeOn = anyOnTemp > 0;
             
         }
         break;
         case ControlChange:
         {
             ControlChangeEvent cc = m.AsControlChange();
-            
+            /*
             char        buff[512];
             sprintf(buff,
                     "CC Received:\t%d\t%d\t%d\r\n",
                     m.channel,
                     m.data[0],
                     m.data[1]);
-            //pod.seed.usb_handle.TransmitInternal((uint8_t *)buff, strlen(buff));
-            
+            pod.seed.usb_handle.TransmitInternal((uint8_t *)buff, strlen(buff));
+            */
 
             switch(cc.control_number)
             {
@@ -553,40 +549,40 @@ void HandleMidiMessage(MidiEvent m)
                 case 54: adjustFilterFreq = cc.value > 0; break;
                 case 55: adjustFilterRez = cc.value > 0; break;
                 case 56: adjustDistortion = cc.value > 0; break;
-                case 35: harmLevelCV = (float)(cc.value) / 127.0f;  break; // E1
-                case 41: harmOddEvenCV = (float)(cc.value) / 127.0f; break; // E2
-                case 44: harmLowHighCV = (float)(cc.value) / 127.0f; break; // E3
+                case 35: harmLevelCV = (float)(cc.value) / 127.f;  break; // E1
+                case 41: harmOddEvenCV = (float)(cc.value) / 127.f; break; // E2
+                case 44: harmLowHighCV = (float)(cc.value) / 127.f; break; // E3
                 case 45: {
                     if (cc.value < 32) {  // E4
-                        bitcrushCV = 0.75f * (float)(cc.value) / 32.0f;
+                        bitcrushCV = 0.75f * (float)(cc.value) / 32.f;
                     } else {
-                        bitcrushCV = 0.75f + 0.25f * (float)(cc.value - 32) / 95.0f; break;
+                        bitcrushCV = 0.75f + 0.25f * (float)(cc.value - 32) / 95.f; break;
                     }
                 }
                 break;
-                case 62: adsrValues.attack = (float)(cc.value) / 127.0f; break; // F1
-                case 63: adsrValues.decay = (float)(cc.value) / 127.0f; break; // F2
-                case 75: adsrValues.sustain = (float)(cc.value) / 127.0f; break; // F3
-                case 76: adsrValues.release = (float)(cc.value) / 127.0f; break; // F4
+                case 62: adsrValues.attack = (float)(cc.value) / 127.f + 0.001f; break; // F1
+                case 63: adsrValues.decay = (float)(cc.value) / 127.f + 0.001f; break; // F2
+                case 75: adsrValues.sustain = (float)(cc.value) / 127.f; break; // F3
+                case 76: adsrValues.release = (float)(cc.value) / 127.f + 0.001f; break; // F4
                 case 77: // F5
                     {
                         if (adjustDistortion) {
-                            distortionCV = (float)(cc.value) / 127.0f;
+                            distortionCV = (float)(cc.value) / 127.f;
                         }
                         if (adjustFilterFreq) {
-                            filterFreqCV = (float)(cc.value) / 127.0f;
+                            filterFreqCV = (float)(cc.value) / 127.f;
                         }
                         if (adjustFilterRez) {
-                            filterRezCV = (float)(cc.value) / 127.0f;
+                            filterRezCV = (float)(cc.value) / 127.f;
                             if (filterRezCV > 0.8f) {
                                 filterRezCV = 0.8f;
                             }
                         }
                         if (adjustInharmonism) {
-                            inharmonism = (float)(cc.value) / 127.0f;
+                            inharmonism = (float)(cc.value) / 127.f;
                         }
                         if (adjustEnvelopeToFilter) {
-                            envelopeToFilterAmount = (float)(cc.value) / 127.0f;
+                            envelopeToFilterAmount = (float)(cc.value) / 127.f;
                         }
                     }
                     break;
@@ -621,7 +617,7 @@ void HandleMidiMessage(MidiEvent m)
         case PitchBend:
         {
             PitchBendEvent pb = m.AsPitchBend();
-            
+            /*
             char        buff[512];
             sprintf(buff,
                     "CC Received:\t%d\t%d\t%d\t%d\r\n",
@@ -629,12 +625,12 @@ void HandleMidiMessage(MidiEvent m)
                     m.data[0],
                     m.data[1],
                     pb.value);
-            // pod.seed.usb_handle.TransmitInternal((uint8_t *)buff, strlen(buff));
-
+            pod.seed.usb_handle.TransmitInternal((uint8_t *)buff, strlen(buff));
+            */
             if (pb.value >= 0) {
-                pitchBend = 1.0f + ((float)(pb.value) / 8191.0f);
+                pitchBend = 1.f + ((float)(pb.value) / 8191.f);
             } else {
-                pitchBend = 1.0f + (((float)(pb.value) / 8192.0f) * 0.5f); 
+                pitchBend = 1.f + (((float)(pb.value) / 8192.f) * 0.5f); 
             }
             
         }
@@ -656,12 +652,6 @@ int main(void)
     adsrValues.sustain = 1.0f;
     adsrValues.release = 0.001f;
 
-    envToVol = false;
-    envToHarmLevel = false;
-    envToOddEven = false;
-    envToLowHigh = false;
-    envToBitcrush = false;
-
     pitchCV = 0.0f;
     harmLevelCV = 1.0f;
     harmOddEvenCV = 0.5f;
@@ -671,23 +661,24 @@ int main(void)
     pitchBend = 1.0f;
 
     // Generate sinewavetable
-    for (int i = 0; i < 1024; i++) {
-        sineWavetable[i] = sinf(TWOPI_F * ((i * 1.0f) / 1024.0f) );
+    for (int i = 0; i < WAVETABLE_LENGTH; i++) {
+        sineWavetable[i] = sinf(TWOPI_F * ((i * 1.f) / (float)(WAVETABLE_LENGTH)) );
     }
 
     //Init everything
     pod.Init();
-    pod.SetAudioBlockSize(8);
+    pod.SetAudioBlockSize(16);
     sample_rate = pod.AudioSampleRate();
 
     pod.seed.usb_handle.Init(UsbHandle::FS_INTERNAL);
     System::Delay(250);
+
     for (int i = 0; i < POLYPHONY; i++) {
-        voices[i].oscFreq = 100.0f;
-        voices[i].amp = 1.0f;
+        voices[i].oscFreq = 100.f;
+        voices[i].amp = 1.f;
         voices[i].on = false;
 
-        voices[i].generalEnvelopeValue = 1.0f;
+        voices[i].generalEnvelopeValue = 1.f;
 
         voices[i].envelopeVol.Init(sample_rate);
         voices[i].envelopeVol.SetAttackTime(adsrValues.attack);
@@ -708,10 +699,10 @@ int main(void)
 
         voices[i].decim.Init();
         voices[i].decim.SetSmoothCrushing(true);
-        voices[i].decim.SetDownsampleFactor(0.0f);
+        voices[i].decim.SetDownsampleFactor(0.f);
 
         for (int j = 0; j < 8; j++) {
-            voices[i].harmonics[j] = 1.0f;
+            voices[i].harmonics[j] = 1.f;
 
         }
     }
@@ -724,18 +715,16 @@ int main(void)
 
     lfo.Init(sample_rate);
     lfo.SetWaveform(lfo.WAVE_TRI);
-    lfo.SetFreq(1.0f),
-    lfo.SetAmp(1.0f);
+    lfo.SetFreq(1.f),
+    lfo.SetAmp(1.f);
 
     decim.Init();
     decim.SetSmoothCrushing(true);
-    decim.SetDownsampleFactor(0.0f);
+    decim.SetDownsampleFactor(0.f);
 
     flt.Init(sample_rate);
     flt.SetFreq(10000);
-    flt.SetRes(0.0f);
-
-
+    flt.SetRes(0.f);
 
     // start callback
     pod.StartAdc();
@@ -778,7 +767,7 @@ void UpdateKnobs()
     k1 = pod.knob1.Process();
     k2 = pod.knob2.Process();
 
-    lfo.SetFreq((1.0f + k1 * 99.0f) / 10.0f);
+    lfo.SetFreq((1.0f + k1 * 99.f) / 10.f);
 
     if (lfoToVolSelection) {
         lfoToVol = k2;
@@ -805,11 +794,19 @@ void UpdateKnobs()
 void UpdateLeds()
 {
     if (maximumOutputValue < 0.8f) {
-        pod.led1.Set(0.0f, maximumOutputValue / 0.8f, 0.0f);
-    } else if (maximumOutputValue < 1.0f) {
-        pod.led1.Set((maximumOutputValue - 0.8f) / 0.2f, (maximumOutputValue - 0.8f) / 0.2f, 0.0f);
+        pod.led1.Set(0.0f, maximumOutputValue / 0.8f, 0.f);
+    } else if (maximumOutputValue < 1.f) {
+        pod.led1.Set((maximumOutputValue - 0.8f) / 0.2f, (maximumOutputValue - 0.8f) / 0.2f, 0.f);
     } else {
-        pod.led1.Set(1.0f, 0.0f, 0.0f);
+        pod.led1.Set(1.f, 0.f, 0.f);
+    }
+
+    if (noteOnAmount > noteOffAmount) {
+        pod.led2.Set(1, 0, 0);
+    } else if (noteOnAmount < noteOffAmount) {
+        pod.led2.Set(0, 0, 1);
+    } else {
+        pod.led2.Set(0, 1, 0);
     }
 
     pod.UpdateLeds();
@@ -891,7 +888,9 @@ void UpdateButtons()
             voices[i].on = false;
         }
 
-        maximumOutputValue = 0.0f;
+        maximumOutputValue = 0.f;
+        noteOnAmount = 0;
+        noteOffAmount = 0;
 
         pod.led1.Set(0, 0, 0);
         pod.led2.Set(0, 0, 0);
@@ -902,20 +901,20 @@ void UpdateButtons()
 void UpdateValues()
 {
     for (int i = 0; i < POLYPHONY; i++) {
-        voices[i].envelope.SetAttackTime(adsrValues.attack * 5.0f);
-        voices[i].envelope.SetDecayTime(adsrValues.decay * 5.0f);
+        voices[i].envelope.SetAttackTime(adsrValues.attack * 5.f);
+        voices[i].envelope.SetDecayTime(adsrValues.decay * 5.f);
         voices[i].envelope.SetSustainLevel(adsrValues.sustain);
-        voices[i].envelope.SetReleaseTime(adsrValues.release * 5.0f);
+        voices[i].envelope.SetReleaseTime(adsrValues.release * 5.f);
 
-        voices[i].envelopeVol.SetAttackTime(envToVol ? adsrValues.attack * 5.0f : 0.001f);
-        voices[i].envelopeVol.SetDecayTime(envToVol ? adsrValues.decay * 5.0f : 0.0f);
-        voices[i].envelopeVol.SetSustainLevel(envToVol ? adsrValues.sustain : 1.0f);
-        voices[i].envelopeVol.SetReleaseTime(adsrValues.release * 5.0f);
+        voices[i].envelopeVol.SetAttackTime(envToVol ? adsrValues.attack * 5.f : 0.001f);
+        voices[i].envelopeVol.SetDecayTime(envToVol ? adsrValues.decay * 5.f : 0.001f);
+        voices[i].envelopeVol.SetSustainLevel(envToVol ? adsrValues.sustain : 1.f);
+        voices[i].envelopeVol.SetReleaseTime(adsrValues.release * 5.f);
 
-        combinedEnvelope.SetAttackTime(adsrValues.attack * 5.0f);
-        combinedEnvelope.SetDecayTime(adsrValues.decay * 5.0f);
+        combinedEnvelope.SetAttackTime(adsrValues.attack * 5.f);
+        combinedEnvelope.SetDecayTime(adsrValues.decay * 5.f);
         combinedEnvelope.SetSustainLevel(adsrValues.sustain);
-        combinedEnvelope.SetReleaseTime(adsrValues.release * 5.0f);
+        combinedEnvelope.SetReleaseTime(adsrValues.release * 5.f);
     }
 
 }
