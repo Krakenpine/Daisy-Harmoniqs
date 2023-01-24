@@ -357,7 +357,7 @@ void NextSamples(float &sig)
     filterFreqCVTemp = (1.f - envelopeToFilterAmount) * filterFreqCVTemp + (envelopeToFilterAmount * combiEnveValueTemp) * filterFreqCVTemp; 
 
 
-    flt.SetFreq((filterFreqCVTemp * filterFreqCVTemp * filterFreqCVTemp * combiEnveValueTemp * 18000.f) + 200.f);
+    flt.SetFreq((filterFreqCVTemp * filterFreqCVTemp * filterFreqCVTemp * 18000.f) + 200.f);
     flt.SetRes(filterRezCV);
 
     sig = flt.Process(sig) * (1.f + filterRezCV);
