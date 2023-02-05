@@ -2,7 +2,9 @@
 TARGET = DaisyHarmoniqs
 
 # Sources
-CPP_SOURCES = DaisyHarmoniqs.cpp
+CPP_SOURCES += \
+DaisyHarmoniqs.cpp \
+Harmoniqs-engine.cpp \
 
 # Library Locations
 LIBDAISY_DIR = ../libDaisy-4.0.0

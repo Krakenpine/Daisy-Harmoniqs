@@ -1,10 +1,10 @@
 # Daisy Harmoniqs
  Additive harmonics synth for Daisy platform
 
-## Version 0.5.1
+## Version 0.6.0
 Works on Daisy Pod.
 
-Six voice additive oscillator synth. Every voice has is comprised of 8 sine wave with frequencies of 1x, 2x, 3x, 4x, 5x, 6x, 7x, and 8x of the fundamental frequency.
+~~Six~~ Ten voice additive oscillator synth. Every voice has is comprised of 8 sine wave with frequencies of 1x, 2x, 3x, 4x, 5x, 6x, 7x, and 8x of the fundamental frequency.
 - *Harmonics level* sets how much frequencies above the fundamental is added
 - *Even - odd harmonics* sets mix of even and odd harmonics. 0 is only even, 1 is only odd and 0.5 has equal amount of everything.
 - *Low - high harmonics* sets different ratios of low and high harmonics. Near 0 is low harmonics, near 1 is high harmonics and 0.5 has all harmonics, but between 0 to 0.5 and 0.5 to 1 there are different mixes of them in (hopefully) ear-pleasing combinations.
@@ -14,7 +14,7 @@ Six voice additive oscillator synth. Every voice has is comprised of 8 sine wave
 - *Filter* After distortion, so common for all voices. Has controls for cut-off frequency and amount of resonance
 - *LFO* Triangle low frequency oscillator, currently speed can be set from 0.1 Hz to 10 Hz. Daisy Pod potentiometer 1 controls the speed, potentiometer 2 controls the amount of LFO applied, see Midi implementation.
 
-Randomish demo video of sounds: https://youtu.be/WRtZkadA0iA
+Randomish demo video of sounds of version 0.5.0: https://youtu.be/WRtZkadA0iA
 
 ## Notes
 
