@@ -4,3 +4,4 @@
 *.lst
 *.hex
 *.elf
+build/
