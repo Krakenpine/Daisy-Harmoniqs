@@ -10,7 +10,7 @@
         "-d",
         "${workspaceRoot}"
       ],
-      "executable": "${workspaceRoot}/build/SynthVoice.elf",
+      "executable": "${workspaceRoot}/build/DaisyHarmoniqs.elf",
       "interface": "swd",
       "name": "Cortex Debug",
       "openOCDLaunchCommands": [
