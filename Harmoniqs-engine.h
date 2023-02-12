@@ -112,7 +112,7 @@ class HarmoniqsEngine
 
         float lfoCurrentValue;
 
-        float sineWavetable[1024];
+        float sineWavetable[WAVETABLE_LENGTH];
 
         adsrValueStruct adsrValues;
 
